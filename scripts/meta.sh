@@ -25,7 +25,12 @@ case "$cmd" in
     ;;
   debug)
     # What Meta thinks this token is: type, permissions, and which account IDs each permission covers.
-    printf 'header = "Authorization: Bearer %s"\ndata-urlencode = "input_token=%s"\n' "$ACCESS_TOKEN" "$ACCESS_TOKEN" |
+    # Business (system-user) tokens can only be inspected with the app's own credentials (App ID + app secret).
+    APP_ID=${APP_ID:-}; [ -n "$APP_ID" ] || read -rp "App ID (App settings > Basic, not secret): " APP_ID
+    APP_SECRET=${APP_SECRET:-}; [ -n "$APP_SECRET" ] || { read -rsp "APP_SECRET (hidden): " APP_SECRET; echo; }
+    APP_SECRET=${APP_SECRET//$'\e[200~'/}; APP_SECRET=${APP_SECRET//$'\e[201~'/}
+    APP_SECRET=$(printf %s "$APP_SECRET" | tr -d '[:space:][:cntrl:]'); APP_ID=$(printf %s "$APP_ID" | tr -cd '0-9')
+    printf 'data-urlencode = "input_token=%s"\ndata-urlencode = "access_token=%s|%s"\n' "$ACCESS_TOKEN" "$APP_ID" "$APP_SECRET" |
       curl -sS -K - -G -w '\nHTTP %{http_code}\n' "$API/debug_token"
     ;;
   check)
