@@ -1,6 +1,7 @@
 #!/usr/bin/env bash
 # One-time Meta setup helpers (Instagram API with Unified Login).
 #   ./scripts/meta.sh id                  list the Instagram account ID(s) your token can use
+#   ./scripts/meta.sh debug               show the token type, permissions and the account IDs they cover
 #   ./scripts/meta.sh check IG_ID         confirm the token can read that Instagram account
 #   ./scripts/meta.sh subscribe IG_ID     subscribe the app to that account's comments + messages webhooks
 # The token is read with hidden input (or from $ACCESS_TOKEN) and handed to curl on stdin, so it never
@@ -22,6 +23,11 @@ case "$cmd" in
     printf 'header = "Authorization: Bearer %s"\n' "$ACCESS_TOKEN" |
       curl -sS -K - -w '\nHTTP %{http_code}\n' "$API/me/assigned_instagram_accounts?fields=id,username"
     ;;
+  debug)
+    # What Meta thinks this token is: type, permissions, and which account IDs each permission covers.
+    printf 'header = "Authorization: Bearer %s"\ndata-urlencode = "input_token=%s"\n' "$ACCESS_TOKEN" "$ACCESS_TOKEN" |
+      curl -sS -K - -G -w '\nHTTP %{http_code}\n' "$API/debug_token"
+    ;;
   check)
     IG_ID=${2:?usage: meta.sh check IG_ID}
     printf 'header = "Authorization: Bearer %s"\n' "$ACCESS_TOKEN" |
@@ -33,6 +39,6 @@ case "$cmd" in
       curl -sS -K - -w '\nHTTP %{http_code}\n' -X POST "$API/$IG_ID/subscribed_apps"
     ;;
   *)
-    echo "usage: $0 id | check IG_ID | subscribe IG_ID" >&2; exit 2
+    echo "usage: $0 id | debug | check IG_ID | subscribe IG_ID" >&2; exit 2
     ;;
 esac
