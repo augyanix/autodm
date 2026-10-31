@@ -26,8 +26,12 @@ Check it's alive: `curl http://localhost:8000/health` → `{"ok":true}`
 `rules.json` — edit anytime, no restart needed.
 
 ```json
-{ "keywords": ["guide"], "follow_gate": true, "reply": "Here you go 🎉 https://example.com" }
+{ "rules": [
+  { "keywords": ["guide"], "follow_gate": true, "reply": "Here you go 🎉 https://example.com" }
+] }
 ```
+
+Each rule supports:
 
 | Field | Meaning |
 |---|---|
@@ -52,14 +56,19 @@ Check it's alive: `curl http://localhost:8000/health` → `{"ok":true}`
 <summary><b>Step-by-step</b></summary>
 
 1. Switch your Instagram to a **Professional** account (Settings → Account type).
-2. Go to [developers.facebook.com](https://developers.facebook.com) → **Create app** → add the **Instagram** product (*API setup with Instagram login*).
-3. Add your Instagram account, then **Generate token** with permissions: `instagram_business_basic`, `instagram_business_manage_comments`, `instagram_business_manage_messages`.
-4. Put into `.env`:
+2. Go to [developers.facebook.com](https://developers.facebook.com) (first time: register as a developer) → **My Apps → Create app**.
+   - App name must not contain "Instagram", "IG", "Meta" or "FB".
+   - Use case: **Manage messaging & content on Instagram** (under the *Content management* filter).
+   - Business: skip for now.
+3. Dashboard → **Use cases → Customize → API setup with Unified login**. Meta requires a **business portfolio** here: click **+ Business portfolio** and create one (free, no verification). Brand-new Facebook accounts may have to wait an hour or more before this works.
+   Pick *Unified login*, not *Facebook login*: autodm talks to `graph.instagram.com`.
+4. **Generate access tokens → Add account**, log in to your Instagram and allow all permissions, then **Generate token**.
+5. Put into `.env`:
    - `ACCESS_TOKEN` = the generated token
    - `IG_USER_ID` = your Instagram account ID (shown next to the token)
-   - `APP_SECRET` = App settings → Basic → App secret
+   - `APP_SECRET` = the **Instagram app secret** on the same page (not the one under App settings → Basic)
    - `VERIFY_TOKEN` = any random string you choose
-5. **Webhooks** → set callback URL `https://YOUR_DOMAIN/webhook` and the same verify token → subscribe to `comments` and `messages`.
+6. **Configure webhooks** → callback URL `https://YOUR_DOMAIN/webhook` and the same verify token → subscribe to `comments` and `messages`.
 
 No App Review is needed while the app stays in *Development* mode and the account is yours.
 
@@ -74,7 +83,7 @@ Point a domain's DNS at your server, set `DOMAIN=yourdomain.com` in `.env`, then
 docker compose --profile https up -d
 ```
 
-Caddy gets and renews the certificate automatically. For local testing you can use any tunnel (e.g. Cloudflare Tunnel).
+Caddy gets and renews the certificate automatically. For local testing, a free Cloudflare quick tunnel works without a domain: `cloudflared tunnel --url http://localhost:8000` prints an `https://….trycloudflare.com` URL (it changes on every run).
 
 </details>
 
