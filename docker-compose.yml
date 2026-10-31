@@ -1,0 +1,22 @@
+services:
+  autodm:
+    build: .
+    env_file: .env
+    restart: unless-stopped
+    ports: ["8000:8000"]
+    volumes:
+      - autodm-data:/data
+      - ./rules.json:/app/rules.json:ro   # edit rules.json, no rebuild needed
+  # Optional free HTTPS (needs DOMAIN in .env pointing at this server): docker compose --profile https up -d
+  caddy:
+    image: caddy:2
+    profiles: ["https"]
+    restart: unless-stopped
+    ports: ["80:80", "443:443"]
+    environment: [DOMAIN]
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy-data:/data
+volumes:
+  autodm-data:
+  caddy-data:
