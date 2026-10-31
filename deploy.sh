@@ -35,6 +35,9 @@ ask_secret() {   # name, prompt  (input is hidden and never echoed or logged)
   local name=$1 prompt=$2 val
   if ! gcloud secrets describe "$name" >/dev/null 2>&1; then
     read -rsp "$prompt (hidden): " val; echo
+    # Drop invisible bytes a paste can add (bracketed-paste codes, newlines, spaces).
+    val=${val//$'\e[200~'/}; val=${val//$'\e[201~'/}; val=$(printf %s "$val" | tr -d '[:space:][:cntrl:]')
+    [ -n "$val" ] || { echo "Nothing entered for $name." >&2; exit 1; }
     printf %s "$val" | gcloud secrets create "$name" --data-file=- >/dev/null
     unset val
   fi

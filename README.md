@@ -63,7 +63,7 @@ Each rule supports:
 3. Create a free **business portfolio** at [business.facebook.com](https://business.facebook.com) (brand-new Facebook accounts may have to wait an hour or more) and turn on two-factor authentication for it. In the app: **Use cases → Customize → API setup with Unified login → + Business portfolio**. New Meta apps only offer *Unified login* (the older *Instagram login* is not available for them).
 4. **Create new configuration** and keep the default permissions (`instagram_basic`, `instagram_manage_messages`, `instagram_manage_comments`). Choose **never expires** if offered. **Use this configuration**.
 5. **Generate access tokens → Add account** → invite your Instagram as an *Instagram Tester*, accept it on instagram.com (Settings → Website permissions → Apps and websites → Tester invites), then **Generate token**. It is shown once: copy it straight into `.env` (or the hidden prompt of `deploy.sh`).
-6. Find your Instagram account ID: `./scripts/meta.sh id` (token entered hidden).
+6. Find your Instagram account ID: it is shown under your account in *Generate access tokens* (`./scripts/meta.sh id` lists it too, but may return an empty list for dashboard tokens). Confirm the token can use it: `./scripts/meta.sh check YOUR_IG_ID` (token entered hidden).
 7. Put into `.env`:
    - `ACCESS_TOKEN` = the generated token
    - `IG_USER_ID` = the Instagram account ID from step 6
