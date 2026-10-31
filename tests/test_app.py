@@ -65,3 +65,32 @@ def test_follow_gate_flow():
     follows["U1"] = True
     post(dm()); assert "example.com/guide" in sent[2]["message"]["text"]
     post(dm()); assert len(sent) == 3
+
+def test_unified_login_comment_id_shape():
+    payload = {"entry": [{"changes": [{"field": "comments", "value": {
+        "comment_id": "uc1", "text": "link", "from": {"id": "U1"}, "media": {"id": "M"}}}]}]}
+    post(payload); post(payload)
+    assert len(sent) == 1 and sent[0]["recipient"] == {"comment_id": "uc1"}
+
+def test_defaults_to_unified_login_host():
+    assert a.API.startswith("https://graph.facebook.com/")
+
+def test_follow_lookup_unavailable_does_not_deliver_and_warns(monkeypatch, caplog):
+    async def get(path, params): return {}          # what graph_get returns when Meta refuses
+    monkeypatch.setattr(a, "graph_get", get)
+    post(comment("c10", "guide", user="U7")); post(dm("U7"))
+    assert len(sent) == 2 and "quick_replies" in sent[1]["message"]
+    assert any("FOLLOW_CHECK=off" in r.message for r in caplog.records)
+
+def test_follow_check_off_trusts_the_tap(monkeypatch):
+    monkeypatch.setattr(a, "FOLLOW_CHECK", "off")
+    post(comment("c11", "guide", user="U8")); post(dm("U8"))
+    assert "example.com/guide" in sent[1]["message"]["text"]
+
+def test_api_errors_are_logged_without_token(caplog, monkeypatch):
+    import httpx
+    monkeypatch.setattr(a, "ACCESS_TOKEN", "sekrit-token-123")
+    r = httpx.Response(400, json={"error": {"code": 10, "message": "Permission denied"}})
+    a.log_api_error("send", r)
+    text = " ".join(x.getMessage() for x in caplog.records)
+    assert "HTTP 400" in text and "Permission denied" in text and a.ACCESS_TOKEN not in text

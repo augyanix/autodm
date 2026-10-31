@@ -55,22 +55,23 @@ Each rule supports:
 <details>
 <summary><b>Step-by-step</b></summary>
 
-1. Switch your Instagram to a **Professional** account (Settings → Account type).
+1. Switch your Instagram to a **Professional** account (Settings → Account type). It must be **public**, or Instagram sends no comment notifications.
 2. Go to [developers.facebook.com](https://developers.facebook.com) (first time: register as a developer) → **My Apps → Create app**.
    - App name must not contain "Instagram", "IG", "Meta" or "FB".
    - Use case: **Manage messaging & content on Instagram** (under the *Content management* filter).
    - Business: skip for now.
-3. Dashboard → **Use cases → Customize → API setup with Unified login**. Meta requires a **business portfolio** here: click **+ Business portfolio** and create one (free, no verification). Brand-new Facebook accounts may have to wait an hour or more before this works.
-   Pick *Unified login*, not *Facebook login*: autodm talks to `graph.instagram.com`.
-4. **Generate access tokens → Add account**, log in to your Instagram and allow all permissions, then **Generate token**.
-5. Put into `.env`:
+3. Create a free **business portfolio** at [business.facebook.com](https://business.facebook.com) (brand-new Facebook accounts may have to wait an hour or more) and turn on two-factor authentication for it. In the app: **Use cases → Customize → API setup with Unified login → + Business portfolio**. New Meta apps only offer *Unified login* (the older *Instagram login* is not available for them).
+4. **Create new configuration** and keep the default permissions (`instagram_basic`, `instagram_manage_messages`, `instagram_manage_comments`). Choose **never expires** if offered. **Use this configuration**.
+5. **Generate access tokens → Add account** → invite your Instagram as an *Instagram Tester*, accept it on instagram.com (Settings → Website permissions → Apps and websites → Tester invites), then **Generate token**. It is shown once: copy it straight into `.env` (or the hidden prompt of `deploy.sh`).
+6. Find your Instagram account ID: `./scripts/meta.sh id` (token entered hidden).
+7. Put into `.env`:
    - `ACCESS_TOKEN` = the generated token
-   - `IG_USER_ID` = your Instagram account ID (shown next to the token)
-   - `APP_SECRET` = the **Instagram app secret** on the same page (not the one under App settings → Basic)
+   - `IG_USER_ID` = the Instagram account ID from step 6
+   - `APP_SECRET` = the **Meta app secret**: App settings → Basic → App secret
    - `VERIFY_TOKEN` = any random string you choose
-6. **Configure webhooks** → callback URL `https://YOUR_DOMAIN/webhook` and the same verify token → subscribe to `comments` and `messages`.
+8. Start the bot (so Meta can reach it), then **Webhooks** (dashboard) → callback URL `https://YOUR_DOMAIN/webhook` and the same verify token → **Verify and save**, and subscribe the account: `./scripts/meta.sh subscribe YOUR_IG_ID`.
 
-No App Review is needed while the app stays in *Development* mode and the account is yours.
+Meta's docs say the app must be *Live* to receive notifications for app users but don't say whether your own tester account is enough in *Development* mode; if no webhooks arrive, publish the app (no App Review is needed for your own account).
 
 </details>
 
@@ -128,7 +129,9 @@ docker compose stop tunnel                            # close it when you're don
 <summary><b>Limits & good to know</b></summary>
 
 - One private reply per comment, within 7 days of the comment.
-- Access tokens expire after ~60 days; generate a new one and restart (`docker compose up -d`), or on Cloud Run add a new version of the `autodm-access-token` secret and re-run `./deploy.sh`. Auto-refresh is on the roadmap.
+- Choose "never expires" when creating the Meta configuration. If you picked an expiry, generate a new token before it lapses and restart (`docker compose up -d`), or on Cloud Run add a new version of the `autodm-access-token` secret and re-run `./deploy.sh`.
+- The token stops working if the app is removed from the business portfolio or the Instagram account moves to another one.
+- Not yet verified live: the follow check (`is_user_follow_business`) with this token type. If Meta refuses it the logs say so; set `FOLLOW_CHECK=off` to deliver the reply when they tap the button.
 - Replies are sent via Meta's official API, so there is no ban risk from scraping.
 - Data (who was already replied to) lives in a Docker volume named `autodm-data`, or in Firestore on Cloud Run (`STORE=firestore`; records expire on their own).
 

@@ -14,10 +14,11 @@ VERIFY_TOKEN = env("VERIFY_TOKEN")
 APP_SECRET = env("APP_SECRET")
 ACCESS_TOKEN = env("ACCESS_TOKEN")
 IG_USER_ID = env("IG_USER_ID")
-API = env("GRAPH_BASE", "https://graph.instagram.com/v21.0")
+API = env("GRAPH_BASE", "https://graph.facebook.com/v26.0")    # Instagram API with Unified Login
 RULES_FILE = env("RULES_FILE", "rules.json")
 DB_FILE = env("DB_FILE", "autodm.db")
 STORE = env("STORE", "sqlite")      # "firestore" on Cloud Run (no disk there)
+FOLLOW_CHECK = env("FOLLOW_CHECK", "on")   # "off": trust that they followed (use if Meta refuses the follow lookup)
 CHECK_PAYLOAD = "FOLLOW_CHECK"
 MAX_BODY = 256 * 1024            # Meta webhooks are a few KB; refuse anything big before buffering it
 
@@ -37,15 +38,30 @@ store = (FirestoreStore(os.environ.get("GOOGLE_CLOUD_PROJECT"), env("FIRESTORE_D
          if STORE == "firestore" else SqliteStore(DB_FILE))
 
 # ---- Instagram API helpers (kept tiny so tests can replace them) -------------------------------
+log = logging.getLogger("autodm")
+
+def log_api_error(what: str, r: httpx.Response):
+    """Say why Meta refused (its error text never contains our token), so a live test is debuggable."""
+    try:
+        err = r.json().get("error", {})
+    except ValueError:
+        err = {}
+    log.warning("Instagram API %s failed: HTTP %s, code %s: %s", what, r.status_code, err.get("code"), err.get("message", ""))
+
 async def graph_post(path: str, payload: dict) -> int:
     async with httpx.AsyncClient(timeout=15) as c:
         r = await c.post(f"{API}/{path}", headers={"Authorization": f"Bearer {ACCESS_TOKEN}"}, json=payload)
+    if r.status_code >= 300:
+        log_api_error("send", r)
     return r.status_code
 
 async def graph_get(path: str, params: dict) -> dict:
     async with httpx.AsyncClient(timeout=15) as c:
         r = await c.get(f"{API}/{path}", headers={"Authorization": f"Bearer {ACCESS_TOKEN}"}, params=params)
-    return r.json() if r.status_code == 200 else {}
+    if r.status_code != 200:
+        log_api_error("lookup", r)
+        return {}
+    return r.json()
 
 def check_button(label="I'm following ✅"):
     return [{"content_type": "text", "title": label, "payload": CHECK_PAYLOAD}]
@@ -83,7 +99,9 @@ async def webhook(request: Request):
             if ch.get("field") == "comments":
                 v = ch["value"]
                 if v.get("from", {}).get("id") != IG_USER_ID:
-                    await on_comment(v["id"], v["from"]["id"], v.get("text", ""), v.get("media", {}).get("id"), rules)
+                    # Unified Login sends comment_id; the older Instagram-login shape used id
+                    await on_comment(v.get("comment_id") or v["id"], v["from"]["id"], v.get("text", ""),
+                                     v.get("media", {}).get("id"), rules)
         for m in entry.get("messaging", []):
             await on_message(m)
     return {"ok": True}
@@ -116,8 +134,13 @@ async def on_message(m):
     if not row or time.time() - row[2] > PENDING_TTL:
         return
     reply, retry, _ = row
-    info = await graph_get(user_id, {"fields": "is_user_follow_business"})
-    if info.get("is_user_follow_business"):
+    if FOLLOW_CHECK == "off":
+        following = True
+    else:
+        following = (await graph_get(user_id, {"fields": "is_user_follow_business"})).get("is_user_follow_business")
+        if following is None:
+            log.warning("Could not tell whether %s follows us; set FOLLOW_CHECK=off to skip the check", user_id)
+    if following:
         await store.clear_pending(user_id)
         await graph_post(f"{IG_USER_ID}/messages", {"recipient": {"id": user_id}, "message": {"text": reply}})
     else:

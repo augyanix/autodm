@@ -41,11 +41,11 @@ ask_secret() {   # name, prompt  (input is hidden and never echoed or logged)
   gcloud secrets add-iam-policy-binding "$name" --member="serviceAccount:$SA" \
     --role=roles/secretmanager.secretAccessor >/dev/null
 }
-ask_secret autodm-access-token "Instagram ACCESS_TOKEN"
-ask_secret autodm-app-secret   "Instagram APP_SECRET"
+ask_secret autodm-access-token "ACCESS_TOKEN (the token generated in the Meta dashboard)"
+ask_secret autodm-app-secret   "APP_SECRET (Meta app secret: App settings > Basic)"
 ask_secret autodm-verify-token "VERIFY_TOKEN (any random string; you will paste the same one into Meta)"
 
-if [ -z "${IG_USER_ID:-}" ]; then read -rp "Instagram account ID (IG_USER_ID, not a secret): " IG_USER_ID; fi
+if [ -z "${IG_USER_ID:-}" ]; then read -rp "Instagram account ID (IG_USER_ID, from ./scripts/meta.sh id; not a secret): " IG_USER_ID; fi
 
 echo "Building and deploying..."
 gcloud run deploy "$SERVICE" --source . --region "$REGION" --service-account "$SA" --allow-unauthenticated \
