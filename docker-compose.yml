@@ -20,7 +20,7 @@ services:
   # Optional temporary public URL for testing, no domain needed: docker compose --profile tunnel up -d
   # Outbound-only (no router/firewall ports opened); it can only forward to autodm:8000, never to your laptop.
   tunnel:
-    image: cloudflare/cloudflared:2026.9.0
+    image: cloudflare/cloudflared:2026.10.5
     profiles: ["tunnel"]
     command: tunnel --no-autoupdate --url http://autodm:8000
     depends_on: [autodm]
