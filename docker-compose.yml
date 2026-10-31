@@ -1,17 +1,41 @@
+x-locked-down: &locked-down          # shared container hardening
+  read_only: true
+  cap_drop: [ALL]
+  security_opt: ["no-new-privileges:true"]
+
 services:
   autodm:
     build: .
     env_file: .env
     restart: unless-stopped
-    ports: ["8000:8000"]
+    <<: *locked-down
+    tmpfs: [/tmp]
+    mem_limit: 256m
+    pids_limit: 100
+    ports: ["127.0.0.1:8000:8000"]       # this machine only; tunnel/caddy reach it over the compose network
     volumes:
       - autodm-data:/data
       - ./rules.json:/app/rules.json:ro   # edit rules.json, no rebuild needed
+
+  # Optional temporary public URL for testing, no domain needed: docker compose --profile tunnel up -d
+  # Outbound-only (no router/firewall ports opened); it can only forward to autodm:8000, never to your laptop.
+  tunnel:
+    image: cloudflare/cloudflared:2026.9.0
+    profiles: ["tunnel"]
+    command: tunnel --no-autoupdate --url http://autodm:8000
+    depends_on: [autodm]
+    restart: "no"                        # never comes back on its own after a reboot or stop
+    <<: *locked-down
+    tmpfs: [/tmp]
+    mem_limit: 128m
+    pids_limit: 50
+
   # Optional free HTTPS (needs DOMAIN in .env pointing at this server): docker compose --profile https up -d
   caddy:
     image: caddy:2
     profiles: ["https"]
     restart: unless-stopped
+    security_opt: ["no-new-privileges:true"]
     ports: ["80:80", "443:443"]
     environment: [DOMAIN]
     volumes:

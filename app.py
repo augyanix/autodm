@@ -1,5 +1,5 @@
 """autodm - self-hosted Instagram comment-to-DM bot with an optional "follow me first" gate."""
-import hashlib, hmac, json, os, sqlite3, time
+import hashlib, hmac, json, logging, os, sqlite3, time
 import httpx
 from fastapi import FastAPI, HTTPException, Request, Response
 
@@ -18,8 +18,18 @@ RULES_FILE = env("RULES_FILE", "rules.json")
 DB_FILE = env("DB_FILE", "autodm.db")
 PENDING_TTL = 24 * 3600          # Meta only lets us message a user for 24h after their last message
 CHECK_PAYLOAD = "FOLLOW_CHECK"
+MAX_BODY = 256 * 1024            # Meta webhooks are a few KB; refuse anything big before buffering it
 
-app = FastAPI(title="autodm")
+class DropQuery(logging.Filter):
+    """Access logs must not contain query strings: Meta's handshake puts hub.verify_token there."""
+    def filter(self, record):
+        if isinstance(record.args, tuple) and len(record.args) >= 3:
+            args = list(record.args); args[2] = str(args[2]).split("?", 1)[0]; record.args = tuple(args)
+        return True
+logging.getLogger("uvicorn.access").addFilter(DropQuery())
+
+# No /docs, /redoc or /openapi.json: nothing on the public URL except the webhook and health check.
+app = FastAPI(title="autodm", docs_url=None, redoc_url=None, openapi_url=None)
 db = sqlite3.connect(DB_FILE, check_same_thread=False)
 db.execute("create table if not exists sent(comment_id text primary key, ts real, keyword text)")
 db.execute("create table if not exists pending(user_id text primary key, reply text, retry text, ts real)")
@@ -52,13 +62,21 @@ def verify(request: Request):
 
 @app.post("/webhook")
 async def webhook(request: Request):
-    body = await request.body()
+    body = b""
+    async for chunk in request.stream():
+        body += chunk
+        if len(body) > MAX_BODY:
+            raise HTTPException(413)
     expected = "sha256=" + hmac.new(APP_SECRET.encode(), body, hashlib.sha256).hexdigest()
     if not hmac.compare_digest(request.headers.get("x-hub-signature-256", ""), expected):
         raise HTTPException(403, "bad signature")
+    try:
+        payload = json.loads(body)
+    except ValueError:
+        raise HTTPException(400)
     with open(RULES_FILE) as f:
         rules = json.load(f)["rules"]
-    for entry in json.loads(body).get("entry", []):
+    for entry in payload.get("entry", []):
         for ch in entry.get("changes", []):
             if ch.get("field") == "comments":
                 v = ch["value"]

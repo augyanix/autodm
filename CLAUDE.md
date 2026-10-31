@@ -6,7 +6,7 @@ Self-hosted Instagram comment-to-DM bot (ManyChat alternative). Goal: grow the o
 - `app.py` — whole service (FastAPI): webhook verify + signature check, comment → rule match → DM, follow-gate flow (`on_comment`, `on_message`).
 - `rules.json` — keywords/replies; read on every webhook, no restart needed.
 - `tests/test_app.py` — pytest; Instagram API calls are faked via `graph_post` / `graph_get`.
-- `Dockerfile`, `docker-compose.yml`, `Caddyfile` — deploy (Caddy only under `--profile https`).
+- `Dockerfile`, `docker-compose.yml`, `Caddyfile` — deploy (Caddy only under `--profile https`, sandboxed cloudflared quick tunnel under `--profile tunnel`).
 
 ## Commands
 - Test: `pip install -r requirements-dev.txt && pytest -q`

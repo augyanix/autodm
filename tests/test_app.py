@@ -33,6 +33,25 @@ def test_verify_handshake():
 def test_bad_signature_rejected():
     assert post(comment("c0", "link"), sig="sha256=bad").status_code == 403
 
+def test_api_docs_not_exposed():
+    for path in ("/docs", "/redoc", "/openapi.json"):
+        assert client.get(path).status_code == 404
+
+def test_oversized_body_rejected_before_signature_check():
+    assert post({"pad": "x" * (a.MAX_BODY + 1)}).status_code == 413
+
+def test_malformed_json_with_valid_signature_is_400():
+    body = b"not json"
+    sig = "sha256=" + hmac.new(b"s", body, hashlib.sha256).hexdigest()
+    assert client.post("/webhook", content=body, headers={"x-hub-signature-256": sig}).status_code == 400
+
+def test_access_log_drops_query_string():
+    import logging
+    rec = logging.LogRecord("uvicorn.access", logging.INFO, "", 0, '%s - "%s %s HTTP/%s" %d',
+                            ("1.2.3.4", "GET", "/webhook?hub.verify_token=v&hub.challenge=1", "1.1", 200), None)
+    a.DropQuery().filter(rec)
+    assert "verify_token" not in rec.getMessage() and "/webhook" in rec.getMessage()
+
 def test_plain_keyword_sends_reply_once():
     post(comment("c1", "send LINK pls")); post(comment("c1", "send LINK pls"))
     assert len(sent) == 1 and "example.com" in sent[0]["message"]["text"]

@@ -83,7 +83,28 @@ Point a domain's DNS at your server, set `DOMAIN=yourdomain.com` in `.env`, then
 docker compose --profile https up -d
 ```
 
-Caddy gets and renews the certificate automatically. For local testing, a free Cloudflare quick tunnel works without a domain: `cloudflared tunnel --url http://localhost:8000` prints an `https://….trycloudflare.com` URL (it changes on every run).
+Caddy gets and renews the certificate automatically.
+
+**Testing from your laptop, no domain:** a sandboxed Cloudflare quick tunnel is built in.
+
+```bash
+docker compose --profile tunnel up -d
+docker compose logs tunnel | grep trycloudflare.com   # your public URL; changes every run
+docker compose stop tunnel                            # close it when you're done
+```
+
+</details>
+
+<details>
+<summary><b>Security guardrails</b></summary>
+
+- The public URL serves only `/webhook` and `/health`; API docs pages are disabled.
+- Every webhook must carry Meta's `X-Hub-Signature-256` signed with your app secret; anything else gets 403. Bodies over 256 KB are refused before processing.
+- Port 8000 is published on `127.0.0.1` only, so it isn't reachable from your Wi-Fi/LAN.
+- Containers run read-only, as a non-root user (autodm), with all Linux capabilities dropped, no privilege escalation, and memory/process limits.
+- The tunnel is outbound-only (no ports opened on your router), runs in its own locked-down container with no access to your files, can only forward to `autodm:8000`, and never restarts on its own.
+- Access logs drop query strings, so tokens never land in logs. Keep `.env` private: `chmod 600 .env`.
+- CI runs `pip-audit`; Dependabot proposes weekly updates for Python packages, images and Actions.
 
 </details>
 
