@@ -4,13 +4,16 @@ Self-hosted Instagram comment-to-DM bot (ManyChat alternative). Goal: grow the o
 
 ## Layout
 - `app.py` — whole service (FastAPI): webhook verify + signature check, comment → rule match → DM, follow-gate flow (`on_comment`, `on_message`).
+- `store.py` — where state lives: `SqliteStore` (Docker/local) or `FirestoreStore` (Cloud Run, `STORE=firestore`). Both have the same 4 async methods; keep them in sync.
 - `rules.json` — keywords/replies; read on every webhook, no restart needed.
-- `tests/test_app.py` — pytest; Instagram API calls are faked via `graph_post` / `graph_get`.
+- `tests/` — pytest; Instagram API calls are faked via `graph_post` / `graph_get`; `test_store.py` runs the same checks on SQLite and a fake Firestore.
+- `deploy.sh`, `.gcloudignore` — Cloud Run deploy (dedicated service account, secrets in Secret Manager). Never run it against the owner's account without being asked.
 - `Dockerfile`, `docker-compose.yml`, `Caddyfile` — deploy (Caddy only under `--profile https`, sandboxed cloudflared quick tunnel under `--profile tunnel`).
 
 ## Commands
 - Test: `pip install -r requirements-dev.txt && pytest -q`
-- Run: `docker compose up -d` (needs `.env` from `.env.example`)
+- Run: `docker compose up -d` (needs `.env` from `.env.example`). Cloud: `PROJECT=<id> ./deploy.sh`.
+- New source files must be added to the Dockerfile `COPY` line, or the container crashes on import.
 
 ## Rules for changes
 - Keep the README quick-start short; push detail into `<details>` blocks.

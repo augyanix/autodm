@@ -4,7 +4,7 @@ WORKDIR /app
 COPY requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt \
  && useradd -r -u 10001 app && mkdir /data && chown app /data
-COPY app.py rules.json ./
+COPY app.py store.py rules.json ./
 USER app
 VOLUME /data
 EXPOSE 8000

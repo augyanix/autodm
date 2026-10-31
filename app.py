@@ -1,7 +1,8 @@
 """autodm - self-hosted Instagram comment-to-DM bot with an optional "follow me first" gate."""
-import hashlib, hmac, json, logging, os, sqlite3, time
+import hashlib, hmac, json, logging, os, time
 import httpx
 from fastapi import FastAPI, HTTPException, Request, Response
+from store import PENDING_TTL, FirestoreStore, SqliteStore
 
 def env(name: str, default: str | None = None) -> str:
     val = os.environ.get(name, default)
@@ -16,7 +17,7 @@ IG_USER_ID = env("IG_USER_ID")
 API = env("GRAPH_BASE", "https://graph.instagram.com/v21.0")
 RULES_FILE = env("RULES_FILE", "rules.json")
 DB_FILE = env("DB_FILE", "autodm.db")
-PENDING_TTL = 24 * 3600          # Meta only lets us message a user for 24h after their last message
+STORE = env("STORE", "sqlite")      # "firestore" on Cloud Run (no disk there)
 CHECK_PAYLOAD = "FOLLOW_CHECK"
 MAX_BODY = 256 * 1024            # Meta webhooks are a few KB; refuse anything big before buffering it
 
@@ -30,9 +31,10 @@ logging.getLogger("uvicorn.access").addFilter(DropQuery())
 
 # No /docs, /redoc or /openapi.json: nothing on the public URL except the webhook and health check.
 app = FastAPI(title="autodm", docs_url=None, redoc_url=None, openapi_url=None)
-db = sqlite3.connect(DB_FILE, check_same_thread=False)
-db.execute("create table if not exists sent(comment_id text primary key, ts real, keyword text)")
-db.execute("create table if not exists pending(user_id text primary key, reply text, retry text, ts real)")
+if STORE not in ("sqlite", "firestore"):
+    raise RuntimeError(f"STORE must be 'sqlite' or 'firestore', not {STORE!r}")
+store = (FirestoreStore(os.environ.get("GOOGLE_CLOUD_PROJECT"), env("FIRESTORE_DATABASE", "(default)"))
+         if STORE == "firestore" else SqliteStore(DB_FILE))
 
 # ---- Instagram API helpers (kept tiny so tests can replace them) -------------------------------
 async def graph_post(path: str, payload: dict) -> int:
@@ -94,13 +96,11 @@ async def on_comment(comment_id, user_id, text, media_id, rules):
         kw = next((k for k in r["keywords"] if k.lower() in text.lower()), None)
         if not kw:
             continue
-        try:                                        # Meta allows only one private reply per comment
-            db.execute("insert into sent values (?,?,?)", (comment_id, time.time(), kw)); db.commit()
-        except sqlite3.IntegrityError:
+        if not await store.claim_comment(comment_id, kw):   # Meta allows only one private reply per comment
             return
         if r.get("follow_gate"):
             retry = r.get("gate_retry", "Looks like you're not following yet. Follow me, then tap the button 👇")
-            db.execute("insert or replace into pending values (?,?,?,?)", (user_id, r["reply"], retry, time.time())); db.commit()
+            await store.set_pending(user_id, r["reply"], retry)
             message = {"text": r.get("gate_ask", "Follow me first, then tap the button below 👇"), "quick_replies": check_button()}
         else:
             message = {"text": r["reply"]}
@@ -112,13 +112,13 @@ async def on_message(m):
     msg = m.get("message")
     if not msg or msg.get("is_echo") or user_id == IG_USER_ID:
         return
-    row = db.execute("select reply, retry, ts from pending where user_id=?", (user_id,)).fetchone()
+    row = await store.get_pending(user_id)
     if not row or time.time() - row[2] > PENDING_TTL:
         return
     reply, retry, _ = row
     info = await graph_get(user_id, {"fields": "is_user_follow_business"})
     if info.get("is_user_follow_business"):
-        db.execute("delete from pending where user_id=?", (user_id,)); db.commit()
+        await store.clear_pending(user_id)
         await graph_post(f"{IG_USER_ID}/messages", {"recipient": {"id": user_id}, "message": {"text": reply}})
     else:
         await graph_post(f"{IG_USER_ID}/messages",

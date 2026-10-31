@@ -75,6 +75,22 @@ No App Review is needed while the app stays in *Development* mode and the accoun
 </details>
 
 <details>
+<summary><b>Run it in the cloud instead of your laptop (Google Cloud Run)</b></summary>
+
+Recommended for anything beyond testing: always on, a permanent HTTPS URL, no tunnel, and nothing sensitive on your laptop.
+
+```bash
+gcloud auth login
+PROJECT=your-autodm-project ./deploy.sh
+```
+
+Use a project dedicated to autodm. The script enables the APIs, creates Firestore (the bot's memory; Cloud Run has no disk), stores your tokens in Secret Manager (hidden prompts, never in the repo or your shell history), runs the bot as its own service account that can read only those 3 secrets and use Firestore, and prints the callback URL for Meta's webhook page. Re-run it to redeploy, e.g. after editing `rules.json` (the rules ship inside the image on Cloud Run).
+
+Cost is a few dollars a month for one always-on instance (`--min-instances 1` in `deploy.sh`; set `0` to scale to zero, at the price of a slow first reply after quiet periods).
+
+</details>
+
+<details>
 <summary><b>Need a public HTTPS URL? (free, built in)</b></summary>
 
 Point a domain's DNS at your server, set `DOMAIN=yourdomain.com` in `.env`, then:
@@ -112,9 +128,9 @@ docker compose stop tunnel                            # close it when you're don
 <summary><b>Limits & good to know</b></summary>
 
 - One private reply per comment, within 7 days of the comment.
-- Access tokens expire after ~60 days; generate a new one and restart (`docker compose up -d`). Auto-refresh is on the roadmap.
+- Access tokens expire after ~60 days; generate a new one and restart (`docker compose up -d`), or on Cloud Run add a new version of the `autodm-access-token` secret and re-run `./deploy.sh`. Auto-refresh is on the roadmap.
 - Replies are sent via Meta's official API, so there is no ban risk from scraping.
-- Data (who was already replied to) lives in a Docker volume named `autodm-data`.
+- Data (who was already replied to) lives in a Docker volume named `autodm-data`, or in Firestore on Cloud Run (`STORE=firestore`; records expire on their own).
 
 </details>
 
