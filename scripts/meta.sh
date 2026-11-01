@@ -31,7 +31,7 @@ read_app() {   # App ID + app secret: App settings > Basic
 case "$cmd" in
   exchange)
     read_app
-    REDIRECT_URI=${REDIRECT_URI:-https://localhost/}
+    REDIRECT_URI=${REDIRECT_URI:-https://github.com/augyanix/autodm}   # must match the Redirect URL saved in the dashboard
     read -rsp "Paste the whole address-bar URL you landed on after logging in (hidden): " LANDED; echo
     LANDED=$(clean "$LANDED"); CODE=${LANDED#*code=}; CODE=${CODE%%&*}; CODE=${CODE%%#*}
     [ -n "$CODE" ] && [ "$CODE" != "$LANDED" ] || { echo "No ?code= found in that URL." >&2; exit 1; }
