@@ -81,6 +81,7 @@ def test_follow_lookup_unavailable_does_not_deliver_and_warns(monkeypatch, caplo
     post(comment("c10", "guide", user="U7")); post(dm("U7"))
     assert len(sent) == 2 and "quick_replies" in sent[1]["message"]
     assert any("FOLLOW_CHECK=off" in r.message for r in caplog.records)
+    assert not any("U7" in r.getMessage() for r in caplog.records)   # no user IDs in logs (privacy policy)
 
 def test_follow_check_off_trusts_the_tap(monkeypatch):
     monkeypatch.setattr(a, "FOLLOW_CHECK", "off")

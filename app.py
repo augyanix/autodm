@@ -139,7 +139,7 @@ async def on_message(m):
     else:
         following = (await graph_get(user_id, {"fields": "is_user_follow_business"})).get("is_user_follow_business")
         if following is None:
-            log.warning("Could not tell whether %s follows us; set FOLLOW_CHECK=off to skip the check", user_id)
+            log.warning("Could not tell whether a user follows us; set FOLLOW_CHECK=off to skip the check")
     if following:
         await store.clear_pending(user_id)
         await graph_post(f"{IG_USER_ID}/messages", {"recipient": {"id": user_id}, "message": {"text": reply}})
