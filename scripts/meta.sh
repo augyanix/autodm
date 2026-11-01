@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # One-time Meta setup helpers (Instagram API with Unified Login).
-#   ./scripts/meta.sh exchange            turn the Login URL's ?code=... into the Business Integration token (copied to clipboard)
+#   ./scripts/meta.sh exchange            turn the Login URL's ?code=... into the Business Integration token (saved in Keychain)
 #   ./scripts/meta.sh id                  list the Instagram account ID(s) your token can use
 #   ./scripts/meta.sh debug               show the token type, permissions and the account IDs they cover
 #   ./scripts/meta.sh check IG_ID         confirm the token can read that Instagram account
@@ -15,8 +15,14 @@ cmd=${1:-}
 # reject the whole request, so strip them from anything pasted.
 clean() { local v=${1//$'\e[200~'/}; v=${v//$'\e[201~'/}; printf %s "$v" | tr -d '[:space:][:cntrl:]'; }
 
+# The token lives in the macOS Keychain (saved by `exchange`), so you never paste it.
+KC_SERVICE=autodm-meta-token; KC_FILE=${AUTODM_KEYCHAIN:-}   # AUTODM_KEYCHAIN: only for tests
 read_token() {
-  if [ -z "${ACCESS_TOKEN:-}" ]; then read -rsp "ACCESS_TOKEN (hidden): " ACCESS_TOKEN; echo; fi
+  if [ -z "${ACCESS_TOKEN:-}" ]; then
+    ACCESS_TOKEN=$(security find-generic-password -s "$KC_SERVICE" -w ${KC_FILE:+"$KC_FILE"} 2>/dev/null || true)
+    if [ -n "$ACCESS_TOKEN" ]; then echo "Using the token saved in Keychain ($KC_SERVICE)." >&2
+    else read -rsp "ACCESS_TOKEN (hidden): " ACCESS_TOKEN; echo; fi
+  fi
   ACCESS_TOKEN=$(clean "$ACCESS_TOKEN" | tr -cd 'A-Za-z0-9._|-')
   [ -n "$ACCESS_TOKEN" ] || { echo "No token entered." >&2; exit 1; }
   echo "Token: ${#ACCESS_TOKEN} characters, starts with ${ACCESS_TOKEN:0:3}" >&2
@@ -37,16 +43,19 @@ case "$cmd" in
     [ -n "$CODE" ] && [ "$CODE" != "$LANDED" ] || { echo "No ?code= found in that URL." >&2; exit 1; }
     RESP=$(printf 'data-urlencode = "client_id=%s"\ndata-urlencode = "client_secret=%s"\ndata-urlencode = "redirect_uri=%s"\ndata-urlencode = "code=%s"\n' \
              "$APP_ID" "$APP_SECRET" "$REDIRECT_URI" "$CODE" | curl -sS -K - -G "$API/oauth/access_token")
-    # Never print the token: copy it to the clipboard and show only harmless details.
-    printf %s "$RESP" | python3 -I -c '
-import json, subprocess, sys
+    # Never print the token: save it in the Keychain (fed to `security -i` on stdin, so it is not
+    # in the process list) and show only harmless details.
+    printf %s "$RESP" | KC_SERVICE=$KC_SERVICE KC_FILE=$KC_FILE python3 -I -c '
+import json, os, re, subprocess, sys
 d = json.load(sys.stdin)
 tok = d.pop("access_token", None)
-if not tok:
+if not tok or not re.fullmatch(r"[A-Za-z0-9._|-]+", tok):
     print(json.dumps(d)); sys.exit(1)
-subprocess.run(["pbcopy"], input=tok.encode(), check=True)
-print(f"Token copied to clipboard ({len(tok)} characters, starts with {tok[:3]}). Other fields: {json.dumps(d)}")
-print("Paste it into Passwords now, then copy something else to clear the clipboard.")'
+svc, kc = os.environ["KC_SERVICE"], os.environ["KC_FILE"]
+cmd = "add-generic-password -U -s %s -a instagram -w %s %s\n" % (svc, tok, kc)
+subprocess.run(["security", "-i"], input=cmd.encode(), check=True, stdout=subprocess.DEVNULL)
+print("Token saved in Keychain as %s (%d characters, starts with %s). Other fields: %s" % (svc, len(tok), tok[:3], json.dumps(d)))
+print("Other commands now use it automatically.")'
     ;;
   id)
     read_token
