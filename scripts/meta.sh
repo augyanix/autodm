@@ -1,6 +1,7 @@
 #!/usr/bin/env bash
 # One-time Meta setup helpers (Instagram API with Unified Login).
 #   ./scripts/meta.sh exchange            turn the Login URL's ?code=... into the Business Integration token (saved in Keychain)
+#   ./scripts/meta.sh save                paste a dashboard-generated token (hidden) and store it in Keychain
 #   ./scripts/meta.sh id                  list the Instagram account ID(s) your token can use
 #   ./scripts/meta.sh debug               show the token type, permissions and the account IDs they cover
 #   ./scripts/meta.sh check IG_ID         confirm the token can read that Instagram account
@@ -57,6 +58,12 @@ subprocess.run(["security", "-i"], input=cmd.encode(), check=True, stdout=subpro
 print("Token saved in Keychain as %s (%d characters, starts with %s). Other fields: %s" % (svc, len(tok), tok[:3], json.dumps(d)))
 print("Other commands now use it automatically.")'
     ;;
+  save)
+    read -rsp "Paste the token (hidden): " TOK; echo
+    TOK=$(clean "$TOK" | tr -cd 'A-Za-z0-9._|-'); [ -n "$TOK" ] || { echo "No token entered." >&2; exit 1; }
+    printf 'add-generic-password -U -s %s -a instagram -w %s %s\n' "$KC_SERVICE" "$TOK" "$KC_FILE" | security -i >/dev/null
+    echo "Token saved in Keychain as $KC_SERVICE (${#TOK} characters, starts with ${TOK:0:3})."
+    ;;
   id)
     read_token
     printf 'header = "Authorization: Bearer %s"\n' "$ACCESS_TOKEN" |
@@ -79,6 +86,6 @@ print("Other commands now use it automatically.")'
       curl -sS -K - -w '\nHTTP %{http_code}\n' -X POST "$API/$IG_ID/subscribed_apps"
     ;;
   *)
-    echo "usage: $0 exchange | id | debug | check IG_ID | subscribe IG_ID" >&2; exit 2
+    echo "usage: $0 exchange | save | id | debug | check IG_ID | subscribe IG_ID" >&2; exit 2
     ;;
 esac
