@@ -31,10 +31,10 @@ fi
 gcloud projects add-iam-policy-binding "$PROJECT" --member="serviceAccount:$SA" \
   --role=roles/datastore.user --condition=None >/dev/null
 
-ask_secret() {   # name, prompt  (input is hidden and never echoed or logged)
-  local name=$1 prompt=$2 val
+ask_secret() {   # name, prompt, [value]  (input is hidden and never echoed or logged)
+  local name=$1 prompt=$2 val=${3:-}
   if ! gcloud secrets describe "$name" >/dev/null 2>&1; then
-    read -rsp "$prompt (hidden): " val; echo
+    [ -n "$val" ] || { read -rsp "$prompt (hidden): " val; echo; }
     # Drop invisible bytes a paste can add (bracketed-paste codes, newlines, spaces).
     val=${val//$'\e[200~'/}; val=${val//$'\e[201~'/}; val=$(printf %s "$val" | tr -d '[:space:][:cntrl:]')
     [ -n "$val" ] || { echo "Nothing entered for $name." >&2; exit 1; }
@@ -44,9 +44,17 @@ ask_secret() {   # name, prompt  (input is hidden and never echoed or logged)
   gcloud secrets add-iam-policy-binding "$name" --member="serviceAccount:$SA" \
     --role=roles/secretmanager.secretAccessor >/dev/null
 }
-ask_secret autodm-access-token "ACCESS_TOKEN (the token generated in the Meta dashboard)"
+# The token saved by ./scripts/meta.sh exchange is reused straight from the macOS Keychain.
+KC_TOKEN=$(security find-generic-password -s autodm-meta-token -w 2>/dev/null || true)
+ask_secret autodm-access-token "ACCESS_TOKEN (the token generated in the Meta dashboard)" "$KC_TOKEN"
+unset KC_TOKEN
 ask_secret autodm-app-secret   "APP_SECRET (Meta app secret: App settings > Basic)"
-ask_secret autodm-verify-token "VERIFY_TOKEN (any random string; you will paste the same one into Meta)"
+# Verify token: a strong random string we generate; Meta only needs the same value pasted in its webhook form.
+if ! gcloud secrets describe autodm-verify-token >/dev/null 2>&1; then
+  ask_secret autodm-verify-token "" "$(openssl rand -hex 24)"
+else
+  ask_secret autodm-verify-token ""
+fi
 
 if [ -z "${IG_USER_ID:-}" ]; then read -rp "Instagram account ID (IG_USER_ID, from ./scripts/meta.sh id; not a secret): " IG_USER_ID; fi
 
@@ -61,3 +69,5 @@ echo
 echo "Live at: $URL"
 curl -s "$URL/health" && echo "  <- health check"
 echo "Meta webhook callback URL: $URL/webhook"
+echo "Meta webhook verify token: $(gcloud secrets versions access latest --secret=autodm-verify-token)"
+echo "  (paste both values into Meta: Use cases > Customize > API setup with Unified login > Configure webhooks)"
