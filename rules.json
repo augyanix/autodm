@@ -3,13 +3,9 @@
     {
       "keywords": ["guide"],
       "follow_gate": true,
-      "gate_ask": "Hey! 👋 Follow me first, then tap the button and I'll send the guide.",
-      "gate_retry": "Hmm, I can't see the follow yet. Follow me, then tap again 👇",
-      "reply": "Here you go 🎉 https://example.com/guide"
-    },
-    {
-      "keywords": ["link"],
-      "reply": "Here's the link: https://example.com"
+      "gate_ask": "Hey! 👋 Follow @augyanix first, then tap the button and I'll send the guide.",
+      "gate_retry": "Hmm, I can't see the follow yet. Follow @augyanix, then tap again 👇",
+      "reply": "Here you go 🎉 https://www.instagram.com/augyanix/"
     }
   ]
 }

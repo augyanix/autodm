@@ -1,6 +1,6 @@
 import hashlib, hmac, json, os, tempfile
 os.environ.update(VERIFY_TOKEN="v", APP_SECRET="s", ACCESS_TOKEN="t", IG_USER_ID="ME",
-                  DB_FILE=tempfile.mktemp(), RULES_FILE=os.path.join(os.path.dirname(__file__), "..", "rules.json"))
+                  DB_FILE=tempfile.mktemp(), RULES_FILE=os.path.join(os.path.dirname(__file__), "rules.test.json"))   # tests never read your live rules
 import pytest
 from fastapi.testclient import TestClient
 import app as a
